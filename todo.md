@@ -74,6 +74,6 @@
 - [x] Write vitest tests for role-based access control
 
 ## Seed Data
-- [ ] Seed 6 sample athletes (basketball, soccer, football, tennis, baseball, triathlon)
-- [ ] Seed sample contracts, opportunities, campaigns, compliance forms
-- [ ] Seed growth content (materials, partners, outreach)
+- [x] Seed 6 sample athletes (basketball, soccer, football, tennis, baseball, triathlon)
+- [x] Seed sample contracts, opportunities, campaigns, compliance forms
+- [x] Seed growth content (materials, partners, outreach)
