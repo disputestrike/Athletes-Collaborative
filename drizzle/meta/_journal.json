@@ -1,19 +1,19 @@
 {
   "version": "7",
-  "dialect": "mysql",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1779329161467,
-      "tag": "0000_uneven_slayback",
+      "version": "7",
+      "when": 1779662349355,
+      "tag": "0000_cloudy_black_bird",
       "breakpoints": true
     },
     {
       "idx": 1,
-      "version": "5",
-      "when": 1779329737810,
-      "tag": "0001_normal_albert_cleary",
+      "version": "7",
+      "when": 1779669674877,
+      "tag": "0001_dark_red_hulk",
       "breakpoints": true
     }
   ]

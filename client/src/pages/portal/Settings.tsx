@@ -92,7 +92,7 @@ export default function Settings() {
           <Shield className="h-5 w-5 text-emerald-600" />
           <div>
             <p className="text-sm font-medium">Authentication</p>
-            <p className="text-xs text-muted-foreground">Secured via Manus OAuth. Your session is protected.</p>
+            <p className="text-xs text-muted-foreground">Secured via Google sign-in. Your session is protected.</p>
           </div>
         </div>
       </SectionCard>

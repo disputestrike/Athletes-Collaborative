@@ -5,7 +5,6 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
-import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
@@ -18,6 +17,16 @@ function requireStaff(role: string) {
 }
 function requireAdmin(role: string) {
   if (!ADMIN_ROLES.includes(role as any)) throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+}
+
+function sanitizeTenant<T extends Record<string, unknown>>(tenant: T) {
+  const {
+    signalWireSpaceUrl: _signalWireSpaceUrl,
+    docusignAccountId: _docusignAccountId,
+    adobeSignAccountId: _adobeSignAccountId,
+    ...safeTenant
+  } = tenant;
+  return safeTenant;
 }
 
 // ─── Auth Router ──────────────────────────────────────────────────────────────
@@ -106,7 +115,7 @@ const athletesRouter = router({
       country: z.string().optional(),
       instagramHandle: z.string().optional(),
       twitterHandle: z.string().optional(),
-      representationStatus: z.enum(["active", "inactive", "pending", "former"]).optional(),
+      representationStatus: z.enum(["active", "inactive", "pending", "prospective", "former"]).optional(),
       agentId: z.number().optional(),
       managerId: z.number().optional(),
     }))
@@ -739,6 +748,309 @@ const growthRouter = router({
 
 // ─── Admin Router ─────────────────────────────────────────────────────────────
 
+// ─── Tenants / White Label Router ──────────────────────────────────────────
+
+const tenantInput = z.object({
+  name: z.string().min(1),
+  slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
+  status: z.enum(["onboarding", "active", "paused", "archived"]).optional(),
+  brandColor: z.string().optional(),
+  accentColor: z.string().optional(),
+  logoUrl: z.string().optional(),
+  heroImageUrl: z.string().optional(),
+  publicDomain: z.string().optional(),
+  portalDomain: z.string().optional(),
+  googleWorkspaceDomain: z.string().optional(),
+  signingProvider: z.enum(["manual", "docusign", "adobe_sign"]).optional(),
+  docusignAccountId: z.string().optional(),
+  adobeSignAccountId: z.string().optional(),
+  googleCalendarId: z.string().optional(),
+  zoomAccountEmail: z.string().optional(),
+  leadCaptureSlug: z.string().optional(),
+  intakeFormUrl: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const tenantsRouter = router({
+  list: protectedProcedure
+    .input(z.object({ search: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      const tenants = await db.getAllTenants(input?.search);
+      return tenants.map(tenant => sanitizeTenant(tenant as any));
+    }),
+
+  overview: protectedProcedure
+    .input(z.object({ tenantId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      return db.getTenantOverview(input?.tenantId);
+    }),
+
+  create: protectedProcedure
+    .input(tenantInput)
+    .mutation(async ({ ctx, input }) => {
+      requireAdmin(ctx.user!.role);
+      const tenant = await db.createTenant(input);
+      await db.logActivity({ userId: ctx.user!.id, action: "Created tenant", entityType: "tenant", details: input.name });
+      return sanitizeTenant(tenant as any);
+    }),
+
+  update: protectedProcedure
+    .input(tenantInput.partial().extend({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      requireAdmin(ctx.user!.role);
+      const { id, ...data } = input;
+      const tenant = await db.updateTenant(id, data);
+      return tenant ? sanitizeTenant(tenant as any) : tenant;
+    }),
+
+  members: protectedProcedure
+    .input(z.object({ tenantId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      return db.getTenantMembers(input.tenantId);
+    }),
+});
+
+// ─── Athlete Pages / Media Router ──────────────────────────────────────────
+
+const athletePagesRouter = router({
+  list: protectedProcedure
+    .input(z.object({ tenantId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      const pages = await db.getAllAthleteLandingPages(input?.tenantId);
+      return pages.map(row => ({
+        ...row,
+        tenant: row.tenant ? sanitizeTenant(row.tenant as any) : row.tenant,
+      }));
+    }),
+
+  publicBySlug: publicProcedure
+    .input(z.object({ slug: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const page = await db.getPublicAthletePage(input.slug);
+      if (!page) throw new TRPCError({ code: "NOT_FOUND" });
+      return {
+        ...page,
+        tenant: page.tenant ? sanitizeTenant(page.tenant as any) : page.tenant,
+      };
+    }),
+
+  upsert: protectedProcedure
+    .input(z.object({
+      id: z.number().optional(),
+      tenantId: z.number().default(1),
+      athleteId: z.number(),
+      slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
+      headline: z.string().optional(),
+      subheadline: z.string().optional(),
+      coverImageUrl: z.string().optional(),
+      videoUrl: z.string().optional(),
+      statsJson: z.string().optional(),
+      socialLinksJson: z.string().optional(),
+      newsJson: z.string().optional(),
+      isPublished: z.boolean().optional(),
+      requiresPassword: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      return db.upsertAthleteLandingPage(input as any);
+    }),
+
+  media: protectedProcedure
+    .input(z.object({
+      athleteId: z.number().optional(),
+      status: z.enum(["draft", "pending", "approved", "rejected", "archived"]).optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const user = ctx.user!;
+      if (STAFF_ROLES.includes(user.role as any)) {
+        return db.getAthleteMediaAssets(input?.athleteId, input?.status);
+      }
+      const profile = await db.getAthleteByUserId(user.id);
+      return db.getAthleteMediaAssets(profile?.id, input?.status);
+    }),
+
+  submitMedia: protectedProcedure
+    .input(z.object({
+      tenantId: z.number().default(1),
+      athleteId: z.number().optional(),
+      title: z.string().min(1),
+      description: z.string().optional(),
+      assetType: z.enum(["image", "video", "story", "document"]),
+      url: z.string().min(1),
+      thumbnailUrl: z.string().optional(),
+      visibility: z.enum(["public", "private"]).default("private"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const profile = input.athleteId ? undefined : await db.getAthleteByUserId(ctx.user!.id);
+      const athleteId = input.athleteId ?? profile?.id;
+      if (!athleteId) throw new TRPCError({ code: "BAD_REQUEST", message: "Athlete profile required" });
+      const staffSubmitted = STAFF_ROLES.includes(ctx.user!.role as any);
+      return db.createAthleteMediaAsset({
+        ...input,
+        athleteId,
+        approvalStatus: staffSubmitted ? "approved" : "pending",
+        submittedBy: ctx.user!.id,
+      } as any);
+    }),
+
+  reviewMedia: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(["approved", "rejected", "archived"]),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      return db.reviewAthleteMediaAsset(input.id, input.status, ctx.user!.id, input.note);
+    }),
+});
+
+// ─── CRM / Lead Capture Router ─────────────────────────────────────────────
+
+const crmLeadInput = z.object({
+  tenantId: z.number().default(1),
+  source: z.string().optional(),
+  athleteFirstName: z.string().min(1),
+  athleteLastName: z.string().min(1),
+  athleteEmail: z.string().email().optional(),
+  athletePhone: z.string().optional(),
+  athleteSport: z.string().optional(),
+  athleteGraduationYear: z.string().optional(),
+  guardianName: z.string().optional(),
+  guardianEmail: z.string().email().optional(),
+  guardianPhone: z.string().optional(),
+  school: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const crmRouter = router({
+  overview: protectedProcedure.query(async ({ ctx }) => {
+    requireStaff(ctx.user!.role);
+    return db.getTenantOverview();
+  }),
+
+  automationStatus: protectedProcedure.query(({ ctx }) => {
+    requireStaff(ctx.user!.role);
+    return {
+      email: {
+        status: "ready",
+        mode: process.env.EMAIL_AUTOMATION_WEBHOOK_URL ? "provider-connected" : "queue-only",
+      },
+      sms: {
+        status: "ready",
+        mode: process.env.SMS_AUTOMATION_WEBHOOK_URL ? "provider-connected" : "queue-only",
+      },
+      calendar: {
+        status: "ready",
+        mode: "google-calendar-hand-off",
+      },
+      meetings: {
+        status: "ready",
+        mode: "zoom-or-google-meet-hand-off",
+      },
+    };
+  }),
+
+  listLeads: protectedProcedure
+    .input(z.object({ status: z.enum(["new", "contacted", "meeting_scheduled", "post_call", "high_level_offer", "developmental_nurture", "closed_won", "closed_lost"]).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      return db.getCrmLeads(input?.status);
+    }),
+
+  submitLead: publicProcedure
+    .input(crmLeadInput)
+    .mutation(async ({ input }) => {
+      return db.createCrmLead({ ...input, source: input.source ?? "lead_magnet" } as any);
+    }),
+
+  createLead: protectedProcedure
+    .input(crmLeadInput.extend({
+      status: z.enum(["new", "contacted", "meeting_scheduled", "post_call", "high_level_offer", "developmental_nurture", "closed_won", "closed_lost"]).optional(),
+      leadScore: z.number().optional(),
+      nextStep: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      return db.createCrmLead(input as any);
+    }),
+
+  updateLead: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(["new", "contacted", "meeting_scheduled", "post_call", "high_level_offer", "developmental_nurture", "closed_won", "closed_lost"]).optional(),
+      leadScore: z.number().optional(),
+      nextStep: z.string().optional(),
+      notes: z.string().optional(),
+      assignedToId: z.number().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      const { id, ...data } = input;
+      return db.updateCrmLead(id, data as any);
+    }),
+
+  listMeetings: protectedProcedure
+    .input(z.object({ leadId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      return db.getLeadMeetings(input?.leadId);
+    }),
+
+  scheduleMeeting: protectedProcedure
+    .input(z.object({
+      tenantId: z.number().default(1),
+      leadId: z.number(),
+      status: z.string().default("proposed"),
+      provider: z.enum(["zoom", "google_meet"]).default("zoom"),
+      startTime: z.string().optional(),
+      endTime: z.string().optional(),
+      meetingUrl: z.string().optional(),
+      calendarEventId: z.string().optional(),
+      proposedSlotsJson: z.string().optional(),
+      staffInviteesJson: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      const meeting = await db.createLeadMeeting({
+        ...input,
+        startTime: input.startTime ? new Date(input.startTime) : undefined,
+        endTime: input.endTime ? new Date(input.endTime) : undefined,
+      } as any);
+      await db.updateCrmLead(input.leadId, { status: "meeting_scheduled", nextStep: "Meeting proposed or booked" } as any);
+      return meeting;
+    }),
+
+  listFollowUps: protectedProcedure
+    .input(z.object({ leadId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      return db.getLeadFollowUps(input?.leadId);
+    }),
+
+  triggerFollowUp: protectedProcedure
+    .input(z.object({
+      tenantId: z.number().default(1),
+      leadId: z.number(),
+      meetingId: z.number().optional(),
+      path: z.enum(["general", "high_level", "developmental"]),
+      channel: z.enum(["email", "sms"]).default("email"),
+      subject: z.string().min(1),
+      body: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireStaff(ctx.user!.role);
+      const followUp = await db.createLeadFollowUp({ ...input, triggeredBy: ctx.user!.id } as any);
+      const nextStatus = input.path === "high_level" ? "high_level_offer" : input.path === "developmental" ? "developmental_nurture" : "post_call";
+      await db.updateCrmLead(input.leadId, { status: nextStatus as any, nextStep: `Follow-up queued via ${input.channel}` });
+      return followUp;
+    }),
+});
+
 const adminRouter = router({
   getDashboardStats: protectedProcedure.query(async ({ ctx }) => {
     requireStaff(ctx.user!.role);
@@ -919,6 +1231,9 @@ export const appRouter = router({
   compliance: complianceRouter,
   messages: messagesRouter,
   growth: growthRouter,
+  tenants: tenantsRouter,
+  athletePages: athletePagesRouter,
+  crm: crmRouter,
   admin: adminRouter,
   upload: uploadRouter,
 });

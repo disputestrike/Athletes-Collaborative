@@ -14,7 +14,7 @@ import {
   LayoutDashboard, User, FileText, Briefcase, Megaphone,
   ShieldCheck, BookOpen, MessageSquare, Settings, LogOut,
   Menu, Bell, ChevronRight, Users, BarChart3, Building2,
-  GraduationCap, Heart, UserCog, X, Users2
+  GraduationCap, Heart, UserCog, X, Users2, Globe2, Images, RadioTower
 } from "lucide-react";
 
 const STAFF_ROLES = ["owner", "admin", "agent", "manager", "marketing_coordinator", "compliance_reviewer"];
@@ -25,6 +25,7 @@ const athleteNav = [
   { href: "/portal/contracts", label: "Contracts", icon: FileText },
   { href: "/portal/opportunities", label: "Opportunities", icon: Briefcase },
   { href: "/portal/marketing", label: "Marketing", icon: Megaphone },
+  { href: "/portal/media", label: "Media Library", icon: Images },
   { href: "/portal/compliance", label: "Compliance", icon: ShieldCheck },
   { href: "/portal/growth", label: "Growth Hub", icon: BookOpen },
   { href: "/portal/messages", label: "Messages", icon: MessageSquare },
@@ -33,7 +34,10 @@ const athleteNav = [
 
 const adminNav = [
   { href: "/admin", label: "Dashboard", icon: BarChart3 },
+  { href: "/admin/tenants", label: "Companies", icon: Building2 },
+  { href: "/admin/crm", label: "CRM", icon: RadioTower },
   { href: "/admin/athletes", label: "Athletes", icon: Users },
+  { href: "/admin/athlete-pages", label: "Athlete Pages", icon: Globe2 },
   { href: "/admin/contracts", label: "Contracts", icon: FileText },
   { href: "/admin/opportunities", label: "Opportunities", icon: Briefcase },
   { href: "/admin/campaigns", label: "Campaigns", icon: Megaphone },

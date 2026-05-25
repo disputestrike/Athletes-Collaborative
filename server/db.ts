@@ -1,7 +1,10 @@
 import { and, desc, eq, like, or, sql, count, sum, isNull, isNotNull, gte, lte, ne } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
+  tenants, InsertTenant,
   users, InsertUser,
+  tenantMembers,
   athleteProfiles, InsertAthleteProfile,
   teamMembers, familyMembers,
   contracts, InsertContract,
@@ -10,22 +13,691 @@ import {
   complianceForms, InsertComplianceForm,
   messageThreads, messages, threadParticipants,
   educationalMaterials, businessPartners, communityOutreach,
+  athleteLandingPages, InsertAthleteLandingPage,
+  athleteMediaAssets, InsertAthleteMediaAsset,
+  crmLeads, InsertCrmLead,
+  leadMeetings, InsertLeadMeeting,
+  leadFollowUps, InsertLeadFollowUp,
   notifications, activityLog, profileUpdateRequests,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _client: ReturnType<typeof postgres> | null = null;
 
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!_db && ENV.databaseUrl) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _client = postgres(ENV.databaseUrl, { max: 10 });
+      _db = drizzle(_client);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
+      _client = null;
     }
   }
   return _db;
+}
+
+const demoDate = new Date("2026-05-01T12:00:00.000Z");
+
+const demoTenant = {
+  id: 1,
+  name: "Athletes Collaborative",
+  slug: "athletes-collaborative",
+  status: "active" as const,
+  brandColor: "#F97316",
+  accentColor: "#111827",
+  logoUrl: null,
+  heroImageUrl:
+    "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1600&q=80",
+  publicDomain: null,
+  portalDomain: null,
+  googleWorkspaceDomain: null,
+  signingProvider: "manual" as const,
+  docusignAccountId: null,
+  adobeSignAccountId: null,
+  googleCalendarId: null,
+  zoomAccountEmail: null,
+  signalWireSpaceUrl: null,
+  leadCaptureSlug: "athletes-collaborative",
+  intakeFormUrl: null,
+  notes:
+    "Parent platform for tenant agencies, athlete portals, CRM intake, scheduling, and white-label branding.",
+  createdAt: demoDate,
+  updatedAt: demoDate,
+};
+
+const demoAthlete = {
+  id: 1,
+  tenantId: 1,
+  userId: 1,
+  firstName: "Marcus",
+  lastName: "Johnson",
+  email: "marcus@example.com",
+  phone: "(555) 010-2291",
+  sport: "Basketball",
+  position: "Guard",
+  team: "Central Prep",
+  league: "High School",
+  bio: "Dynamic guard with a strong academic profile and a growing community presence.",
+  photoUrl:
+    "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=900&q=80",
+  representationStatus: "active" as const,
+  contractValue: 0,
+  agentId: null,
+  managerId: null,
+  dateOfBirth: null,
+  nationality: "United States",
+  city: "Dallas",
+  state: "TX",
+  country: "USA",
+  instagramHandle: "marcus.hoops",
+  twitterHandle: "marcushoops",
+  notes: null,
+  isActive: true,
+  createdAt: demoDate,
+  updatedAt: demoDate,
+};
+
+const demoLandingPage = {
+  id: 1,
+  tenantId: 1,
+  athleteId: 1,
+  slug: "marcus-johnson",
+  headline: "Marcus Johnson",
+  subheadline:
+    "Basketball guard building a complete profile across academics, community impact, and brand-safe NIL opportunities.",
+  coverImageUrl:
+    "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1600&q=80",
+  videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
+  statsJson: JSON.stringify([
+    { label: "PPG", value: "18.4" },
+    { label: "GPA", value: "3.8" },
+    { label: "Followers", value: "24K" },
+  ]),
+  socialLinksJson: JSON.stringify([
+    { label: "Instagram", url: "https://instagram.com/marcus.hoops" },
+    { label: "X", url: "https://x.com/marcushoops" },
+  ]),
+  newsJson: JSON.stringify([
+    {
+      title: "Selected for regional showcase",
+      date: "2026-04-20",
+      summary: "Marcus was invited to the summer regional prospect showcase.",
+    },
+  ]),
+  isPublished: true,
+  requiresPassword: false,
+  passwordHash: null,
+  createdAt: demoDate,
+  updatedAt: demoDate,
+};
+
+const demoMediaAssets = [
+  {
+    id: 1,
+    tenantId: 1,
+    athleteId: 1,
+    title: "Showcase action photo",
+    description: "Approved landing page image for recruiting and brand packets.",
+    assetType: "image" as const,
+    url: "https://images.unsplash.com/photo-1519861531473-9200262188bf?auto=format&fit=crop&w=1200&q=80",
+    storageKey: null,
+    thumbnailUrl: null,
+    visibility: "public",
+    approvalStatus: "approved" as const,
+    submittedBy: 1,
+    reviewedBy: 1,
+    reviewedAt: demoDate,
+    reviewNote: "Approved for public page.",
+    createdAt: demoDate,
+    updatedAt: demoDate,
+  },
+  {
+    id: 2,
+    tenantId: 1,
+    athleteId: 1,
+    title: "Behind-the-scenes training clip",
+    description: "Athlete submission waiting for staff review.",
+    assetType: "video" as const,
+    url: "https://example.com/training-clip.mp4",
+    storageKey: null,
+    thumbnailUrl: null,
+    visibility: "private",
+    approvalStatus: "pending" as const,
+    submittedBy: 1,
+    reviewedBy: null,
+    reviewedAt: null,
+    reviewNote: null,
+    createdAt: demoDate,
+    updatedAt: demoDate,
+  },
+];
+
+const demoLead = {
+  id: 1,
+  tenantId: 1,
+  source: "SMS lead magnet",
+  status: "meeting_scheduled" as const,
+  athleteFirstName: "Avery",
+  athleteLastName: "Williams",
+  athleteEmail: "avery@example.com",
+  athletePhone: "(555) 010-1440",
+  athleteSport: "Soccer",
+  athleteGraduationYear: "2027",
+  guardianName: "Dana Williams",
+  guardianEmail: "dana@example.com",
+  guardianPhone: "(555) 010-1441",
+  school: "Northside Academy",
+  notes: "Interested in NIL education and family onboarding.",
+  leadScore: 84,
+  assignedToId: null,
+  nextStep: "Confirm parent/athlete Zoom call and send prep material.",
+  createdAt: demoDate,
+  updatedAt: demoDate,
+};
+
+const demoMeeting = {
+  id: 1,
+  tenantId: 1,
+  leadId: 1,
+  status: "scheduled",
+  provider: "zoom" as const,
+  startTime: new Date("2026-05-27T20:00:00.000Z"),
+  endTime: new Date("2026-05-27T20:30:00.000Z"),
+  meetingUrl: "https://zoom.us/j/demo",
+  calendarEventId: "demo-calendar-event",
+  proposedSlotsJson: JSON.stringify([
+    "2026-05-27T20:00:00.000Z",
+    "2026-05-28T19:00:00.000Z",
+  ]),
+  staffInviteesJson: JSON.stringify(["staff@athletescollaborative.com"]),
+  createdAt: demoDate,
+  updatedAt: demoDate,
+};
+
+const demoFollowUp = {
+  id: 1,
+  tenantId: 1,
+  leadId: 1,
+  meetingId: 1,
+  path: "high_level" as const,
+  channel: "email",
+  subject: "Next steps with Athletes Collaborative",
+  body:
+    "Thank you for meeting with us. Here are the next steps, FAQs, and materials for families reviewing representation.",
+  triggeredBy: 1,
+  sentAt: null,
+  createdAt: demoDate,
+};
+
+let demoTenants: any[] = [demoTenant];
+let demoAthletes: any[] = [demoAthlete];
+let demoLandingPages: any[] = [demoLandingPage];
+let demoMediaStore: any[] = [...demoMediaAssets];
+let demoLeads: any[] = [demoLead];
+let demoMeetings: any[] = [demoMeeting];
+let demoFollowUps: any[] = [demoFollowUp];
+
+function useDemoFallback(operation: string, error: unknown) {
+  if (ENV.isProduction) throw error;
+  console.warn(`[Database] Falling back to demo data for ${operation}:`, error);
+}
+
+function shouldUseDemoData() {
+  return !ENV.isProduction && process.env.USE_DATABASE_IN_DEV !== "true";
+}
+
+function nextDemoId(items: any[]) {
+  return Math.max(0, ...items.map(item => Number(item.id) || 0)) + 1;
+}
+
+// ─── Tenants / White Label ───────────────────────────────────────────────────
+
+export async function getAllTenants(search?: string) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const needle = search?.toLowerCase();
+    return needle
+      ? demoTenants.filter(tenant => `${tenant.name} ${tenant.slug}`.toLowerCase().includes(needle))
+      : demoTenants;
+  }
+  try {
+    return await db
+      .select()
+      .from(tenants)
+      .where(
+        search
+          ? or(like(tenants.name, `%${search}%`), like(tenants.slug, `%${search}%`))
+          : undefined
+      )
+      .orderBy(desc(tenants.createdAt));
+  } catch (error) {
+    useDemoFallback("getAllTenants", error);
+    return [demoTenant];
+  }
+}
+
+export async function getTenantBySlug(slug: string) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) return demoTenants.find(tenant => tenant.slug === slug);
+  try {
+    const r = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
+    return r[0];
+  } catch (error) {
+    useDemoFallback("getTenantBySlug", error);
+    return slug === demoTenant.slug ? demoTenant : undefined;
+  }
+}
+
+export async function getTenantById(id: number) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) return demoTenants.find(tenant => tenant.id === id);
+  try {
+    const r = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
+    return r[0];
+  } catch (error) {
+    useDemoFallback("getTenantById", error);
+    return id === demoTenant.id ? demoTenant : undefined;
+  }
+}
+
+export async function createTenant(data: InsertTenant) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const tenant = { ...demoTenant, ...data, id: nextDemoId(demoTenants), createdAt: new Date(), updatedAt: new Date() };
+    demoTenants = [tenant, ...demoTenants];
+    return tenant;
+  }
+  try {
+    const r = await db.insert(tenants).values(data).returning();
+    return r[0];
+  } catch (error) {
+    useDemoFallback("createTenant", error);
+    return { ...demoTenant, ...data, id: Date.now(), createdAt: new Date(), updatedAt: new Date() };
+  }
+}
+
+export async function updateTenant(id: number, data: Partial<InsertTenant>) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const existing = demoTenants.find(tenant => tenant.id === id) ?? demoTenant;
+    const updated = { ...existing, ...data, id, updatedAt: new Date() };
+    demoTenants = demoTenants.map(tenant => tenant.id === id ? updated : tenant);
+    return updated;
+  }
+  try {
+    const r = await db.update(tenants).set({ ...data, updatedAt: new Date() }).where(eq(tenants.id, id)).returning();
+    return r[0];
+  } catch (error) {
+    useDemoFallback("updateTenant", error);
+    return { ...demoTenant, ...data, id, updatedAt: new Date() };
+  }
+}
+
+export async function getTenantOverview(tenantId?: number) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    return {
+      tenantCount: demoTenants.length,
+      activeTenants: demoTenants.filter(tenant => tenant.status === "active").length,
+      athletePages: demoLandingPages.length,
+      pendingMedia: demoMediaStore.filter(asset => asset.approvalStatus === "pending").length,
+      openLeads: demoLeads.filter(lead => !["closed_won", "closed_lost"].includes(lead.status)).length,
+      meetingsScheduled: demoMeetings.filter(meeting => meeting.status === "scheduled").length,
+    };
+  }
+
+  try {
+    const tenantWhere = tenantId ? eq(tenants.id, tenantId) : undefined;
+    const pageWhere = tenantId ? eq(athleteLandingPages.tenantId, tenantId) : undefined;
+    const mediaWhere = tenantId
+      ? and(eq(athleteMediaAssets.tenantId, tenantId), eq(athleteMediaAssets.approvalStatus, "pending"))
+      : eq(athleteMediaAssets.approvalStatus, "pending");
+    const leadWhere = tenantId
+      ? and(eq(crmLeads.tenantId, tenantId), sql`${crmLeads.status} NOT IN ('closed_won', 'closed_lost')`)
+      : sql`${crmLeads.status} NOT IN ('closed_won', 'closed_lost')`;
+    const meetingWhere = tenantId
+      ? and(eq(leadMeetings.tenantId, tenantId), eq(leadMeetings.status, "scheduled"))
+      : eq(leadMeetings.status, "scheduled");
+
+    const [tenantCount, activeTenants, pageCount, pendingMedia, openLeads, meetings] = await Promise.all([
+      db.select({ c: count() }).from(tenants).where(tenantWhere),
+      db.select({ c: count() }).from(tenants).where(
+        tenantId ? and(eq(tenants.id, tenantId), eq(tenants.status, "active")) : eq(tenants.status, "active")
+      ),
+      db.select({ c: count() }).from(athleteLandingPages).where(pageWhere),
+      db.select({ c: count() }).from(athleteMediaAssets).where(mediaWhere),
+      db.select({ c: count() }).from(crmLeads).where(leadWhere),
+      db.select({ c: count() }).from(leadMeetings).where(meetingWhere),
+    ]);
+
+    return {
+      tenantCount: tenantCount[0]?.c ?? 0,
+      activeTenants: activeTenants[0]?.c ?? 0,
+      athletePages: pageCount[0]?.c ?? 0,
+      pendingMedia: pendingMedia[0]?.c ?? 0,
+      openLeads: openLeads[0]?.c ?? 0,
+      meetingsScheduled: meetings[0]?.c ?? 0,
+    };
+  } catch (error) {
+    useDemoFallback("getTenantOverview", error);
+    return {
+      tenantCount: 1,
+      activeTenants: 1,
+      athletePages: 1,
+      pendingMedia: 1,
+      openLeads: 1,
+      meetingsScheduled: 1,
+    };
+  }
+}
+
+export async function getTenantMembers(tenantId: number) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) return [];
+  try {
+    return await db.select().from(tenantMembers).where(eq(tenantMembers.tenantId, tenantId));
+  } catch (error) {
+    useDemoFallback("getTenantMembers", error);
+    return [];
+  }
+}
+
+// ─── Athlete Landing Pages / Media ─────────────────────────────────────────
+
+export async function getAllAthleteLandingPages(tenantId?: number) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    return demoLandingPages
+      .filter(page => !tenantId || page.tenantId === tenantId)
+      .map(page => ({
+        page,
+        athlete: demoAthletes.find(athlete => athlete.id === page.athleteId) ?? null,
+        tenant: demoTenants.find(tenant => tenant.id === page.tenantId) ?? null,
+      }));
+  }
+  try {
+    return await db
+      .select({
+        page: athleteLandingPages,
+        athlete: athleteProfiles,
+        tenant: tenants,
+      })
+      .from(athleteLandingPages)
+      .leftJoin(athleteProfiles, eq(athleteLandingPages.athleteId, athleteProfiles.id))
+      .leftJoin(tenants, eq(athleteLandingPages.tenantId, tenants.id))
+      .where(tenantId ? eq(athleteLandingPages.tenantId, tenantId) : undefined)
+      .orderBy(desc(athleteLandingPages.updatedAt));
+  } catch (error) {
+    useDemoFallback("getAllAthleteLandingPages", error);
+    return [{ page: demoLandingPage, athlete: demoAthlete, tenant: demoTenant }];
+  }
+}
+
+export async function getPublicAthletePage(slug: string) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const page = demoLandingPages.find(item => item.slug === slug && item.isPublished);
+    if (!page) return undefined;
+    return {
+      page,
+      athlete: demoAthletes.find(athlete => athlete.id === page.athleteId) ?? null,
+      tenant: demoTenants.find(tenant => tenant.id === page.tenantId) ?? null,
+      media: demoMediaStore.filter(asset => asset.athleteId === page.athleteId && asset.approvalStatus === "approved" && asset.visibility === "public"),
+    };
+  }
+
+  try {
+    const r = await db
+      .select({
+        page: athleteLandingPages,
+        athlete: athleteProfiles,
+        tenant: tenants,
+      })
+      .from(athleteLandingPages)
+      .leftJoin(athleteProfiles, eq(athleteLandingPages.athleteId, athleteProfiles.id))
+      .leftJoin(tenants, eq(athleteLandingPages.tenantId, tenants.id))
+      .where(and(eq(athleteLandingPages.slug, slug), eq(athleteLandingPages.isPublished, true)))
+      .limit(1);
+
+    const row = r[0];
+    if (!row) return undefined;
+
+    const media = await db
+      .select()
+      .from(athleteMediaAssets)
+      .where(
+        and(
+          eq(athleteMediaAssets.athleteId, row.page.athleteId),
+          eq(athleteMediaAssets.approvalStatus, "approved"),
+          eq(athleteMediaAssets.visibility, "public")
+        )
+      )
+      .orderBy(desc(athleteMediaAssets.createdAt));
+
+    return { ...row, media };
+  } catch (error) {
+    useDemoFallback("getPublicAthletePage", error);
+    if (slug !== demoLandingPage.slug) return undefined;
+    return {
+      page: demoLandingPage,
+      athlete: demoAthlete,
+      tenant: demoTenant,
+      media: demoMediaAssets.filter(asset => asset.approvalStatus === "approved" && asset.visibility === "public"),
+    };
+  }
+}
+
+export async function upsertAthleteLandingPage(data: Partial<InsertAthleteLandingPage> & { id?: number }) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    if (data.id) {
+      const existing = demoLandingPages.find(page => page.id === data.id) ?? demoLandingPage;
+      const updated = { ...existing, ...data, updatedAt: new Date() };
+      demoLandingPages = demoLandingPages.map(page => page.id === data.id ? updated : page);
+      return updated;
+    }
+    const page = { ...demoLandingPage, ...data, id: nextDemoId(demoLandingPages), createdAt: new Date(), updatedAt: new Date() };
+    demoLandingPages = [page, ...demoLandingPages];
+    return page;
+  }
+  try {
+    const { id, ...values } = data;
+    if (id) {
+      const r = await db
+        .update(athleteLandingPages)
+        .set({ ...values, updatedAt: new Date() })
+        .where(eq(athleteLandingPages.id, id))
+        .returning();
+      return r[0];
+    }
+    const r = await db.insert(athleteLandingPages).values(values as InsertAthleteLandingPage).returning();
+    return r[0];
+  } catch (error) {
+    useDemoFallback("upsertAthleteLandingPage", error);
+    return { ...demoLandingPage, ...data, updatedAt: new Date() };
+  }
+}
+
+export async function getAthleteMediaAssets(athleteId?: number, status?: string) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    return demoMediaStore.filter(asset =>
+      (!athleteId || asset.athleteId === athleteId) && (!status || asset.approvalStatus === status)
+    );
+  }
+  const filters = [
+    athleteId ? eq(athleteMediaAssets.athleteId, athleteId) : undefined,
+    status ? eq(athleteMediaAssets.approvalStatus, status as any) : undefined,
+  ].filter(Boolean) as any[];
+  try {
+    return await db
+      .select()
+      .from(athleteMediaAssets)
+      .where(filters.length ? and(...filters) : undefined)
+      .orderBy(desc(athleteMediaAssets.createdAt));
+  } catch (error) {
+    useDemoFallback("getAthleteMediaAssets", error);
+    return demoMediaAssets.filter(asset =>
+      (!athleteId || asset.athleteId === athleteId) && (!status || asset.approvalStatus === status)
+    );
+  }
+}
+
+export async function createAthleteMediaAsset(data: InsertAthleteMediaAsset) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const asset = { ...demoMediaAssets[1], ...data, id: nextDemoId(demoMediaStore), createdAt: new Date(), updatedAt: new Date() };
+    demoMediaStore = [asset, ...demoMediaStore];
+    return asset;
+  }
+  try {
+    const r = await db.insert(athleteMediaAssets).values(data).returning();
+    return r[0];
+  } catch (error) {
+    useDemoFallback("createAthleteMediaAsset", error);
+    return { ...demoMediaAssets[1], ...data, id: Date.now(), createdAt: new Date(), updatedAt: new Date() };
+  }
+}
+
+export async function reviewAthleteMediaAsset(
+  id: number,
+  status: "approved" | "rejected" | "archived",
+  reviewedBy: number,
+  note?: string
+) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const existing = demoMediaStore.find(asset => asset.id === id);
+    const updated = { ...existing, approvalStatus: status, reviewedBy, reviewedAt: new Date(), reviewNote: note ?? null, updatedAt: new Date() };
+    demoMediaStore = demoMediaStore.map(asset => asset.id === id ? updated : asset);
+    return updated;
+  }
+  try {
+    const r = await db
+      .update(athleteMediaAssets)
+      .set({ approvalStatus: status, reviewedBy, reviewedAt: new Date(), reviewNote: note ?? null, updatedAt: new Date() })
+      .where(eq(athleteMediaAssets.id, id))
+      .returning();
+    return r[0];
+  } catch (error) {
+    useDemoFallback("reviewAthleteMediaAsset", error);
+    return { ...demoMediaAssets.find(asset => asset.id === id), approvalStatus: status, reviewedBy, reviewNote: note ?? null };
+  }
+}
+
+// ─── CRM / Scheduling ──────────────────────────────────────────────────────
+
+export async function getCrmLeads(status?: string) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) return demoLeads.filter(lead => !status || lead.status === status);
+  try {
+    return await db
+      .select()
+      .from(crmLeads)
+      .where(status ? eq(crmLeads.status, status as any) : undefined)
+      .orderBy(desc(crmLeads.updatedAt));
+  } catch (error) {
+    useDemoFallback("getCrmLeads", error);
+    return [demoLead].filter(lead => !status || lead.status === status);
+  }
+}
+
+export async function createCrmLead(data: InsertCrmLead) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const lead = { ...demoLead, ...data, id: nextDemoId(demoLeads), createdAt: new Date(), updatedAt: new Date() };
+    demoLeads = [lead, ...demoLeads];
+    return lead;
+  }
+  try {
+    const r = await db.insert(crmLeads).values(data).returning();
+    return r[0];
+  } catch (error) {
+    useDemoFallback("createCrmLead", error);
+    return { ...demoLead, ...data, id: Date.now(), createdAt: new Date(), updatedAt: new Date() };
+  }
+}
+
+export async function updateCrmLead(id: number, data: Partial<InsertCrmLead>) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const existing = demoLeads.find(lead => lead.id === id) ?? demoLead;
+    const updated = { ...existing, ...data, id, updatedAt: new Date() };
+    demoLeads = demoLeads.map(lead => lead.id === id ? updated : lead);
+    return updated;
+  }
+  try {
+    const r = await db.update(crmLeads).set({ ...data, updatedAt: new Date() }).where(eq(crmLeads.id, id)).returning();
+    return r[0];
+  } catch (error) {
+    useDemoFallback("updateCrmLead", error);
+    return { ...demoLead, ...data, id, updatedAt: new Date() };
+  }
+}
+
+export async function getLeadMeetings(leadId?: number) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) return demoMeetings.filter(meeting => !leadId || meeting.leadId === leadId);
+  try {
+    return await db
+      .select()
+      .from(leadMeetings)
+      .where(leadId ? eq(leadMeetings.leadId, leadId) : undefined)
+      .orderBy(desc(leadMeetings.createdAt));
+  } catch (error) {
+    useDemoFallback("getLeadMeetings", error);
+    return [demoMeeting].filter(meeting => !leadId || meeting.leadId === leadId);
+  }
+}
+
+export async function createLeadMeeting(data: InsertLeadMeeting) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const meeting = { ...demoMeeting, ...data, id: nextDemoId(demoMeetings), createdAt: new Date(), updatedAt: new Date() };
+    demoMeetings = [meeting, ...demoMeetings];
+    return meeting;
+  }
+  try {
+    const r = await db.insert(leadMeetings).values(data).returning();
+    return r[0];
+  } catch (error) {
+    useDemoFallback("createLeadMeeting", error);
+    return { ...demoMeeting, ...data, id: Date.now(), createdAt: new Date(), updatedAt: new Date() };
+  }
+}
+
+export async function getLeadFollowUps(leadId?: number) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) return demoFollowUps.filter(followUp => !leadId || followUp.leadId === leadId);
+  try {
+    return await db
+      .select()
+      .from(leadFollowUps)
+      .where(leadId ? eq(leadFollowUps.leadId, leadId) : undefined)
+      .orderBy(desc(leadFollowUps.createdAt));
+  } catch (error) {
+    useDemoFallback("getLeadFollowUps", error);
+    return [demoFollowUp].filter(followUp => !leadId || followUp.leadId === leadId);
+  }
+}
+
+export async function createLeadFollowUp(data: InsertLeadFollowUp) {
+  const db = await getDb();
+  if (!db || shouldUseDemoData()) {
+    const followUp = { ...demoFollowUp, ...data, id: nextDemoId(demoFollowUps), createdAt: new Date() };
+    demoFollowUps = [followUp, ...demoFollowUps];
+    return followUp;
+  }
+  try {
+    const r = await db.insert(leadFollowUps).values(data).returning();
+    return r[0];
+  } catch (error) {
+    useDemoFallback("createLeadFollowUp", error);
+    return { ...demoFollowUp, ...data, id: Date.now(), createdAt: new Date() };
+  }
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -48,7 +720,13 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
-  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+  await db
+    .insert(users)
+    .values(values)
+    .onConflictDoUpdate({
+      target: users.openId,
+      set: { ...updateSet, updatedAt: new Date() },
+    });
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -74,32 +752,53 @@ export async function updateUserRole(userId: number, role: typeof users.$inferSe
 
 export async function getAllAthletes(search?: string) {
   const db = await getDb();
-  if (!db) return [];
-  const q = db.select().from(athleteProfiles).where(
-    search
-      ? or(
-          like(athleteProfiles.firstName, `%${search}%`),
-          like(athleteProfiles.lastName, `%${search}%`),
-          like(athleteProfiles.sport, `%${search}%`),
-          like(athleteProfiles.team, `%${search}%`)
-        )
-      : undefined
-  ).orderBy(desc(athleteProfiles.createdAt));
-  return q;
+  if (!db || shouldUseDemoData()) {
+    if (!search) return demoAthletes;
+    const needle = search.toLowerCase();
+    return demoAthletes.filter(athlete =>
+      `${athlete.firstName} ${athlete.lastName} ${athlete.sport} ${athlete.team ?? ""}`.toLowerCase().includes(needle)
+    );
+  }
+  try {
+    const q = db.select().from(athleteProfiles).where(
+      search
+        ? or(
+            like(athleteProfiles.firstName, `%${search}%`),
+            like(athleteProfiles.lastName, `%${search}%`),
+            like(athleteProfiles.sport, `%${search}%`),
+            like(athleteProfiles.team, `%${search}%`)
+          )
+        : undefined
+    ).orderBy(desc(athleteProfiles.createdAt));
+    return await q;
+  } catch (error) {
+    useDemoFallback("getAllAthletes", error);
+    return [demoAthlete];
+  }
 }
 
 export async function getAthleteById(id: number) {
   const db = await getDb();
-  if (!db) return undefined;
-  const r = await db.select().from(athleteProfiles).where(eq(athleteProfiles.id, id)).limit(1);
-  return r[0];
+  if (!db || shouldUseDemoData()) return demoAthletes.find(athlete => athlete.id === id);
+  try {
+    const r = await db.select().from(athleteProfiles).where(eq(athleteProfiles.id, id)).limit(1);
+    return r[0];
+  } catch (error) {
+    useDemoFallback("getAthleteById", error);
+    return id === demoAthlete.id ? demoAthlete : undefined;
+  }
 }
 
 export async function getAthleteByUserId(userId: number) {
   const db = await getDb();
-  if (!db) return undefined;
-  const r = await db.select().from(athleteProfiles).where(eq(athleteProfiles.userId, userId)).limit(1);
-  return r[0];
+  if (!db || shouldUseDemoData()) return demoAthletes.find(athlete => athlete.userId === userId);
+  try {
+    const r = await db.select().from(athleteProfiles).where(eq(athleteProfiles.userId, userId)).limit(1);
+    return r[0];
+  } catch (error) {
+    useDemoFallback("getAthleteByUserId", error);
+    return userId === demoAthlete.userId ? demoAthlete : undefined;
+  }
 }
 
 export async function createAthlete(data: InsertAthleteProfile) {
@@ -548,7 +1247,7 @@ export async function getRecentActivity(limit = 20) {
 
 export async function getAdminKPIs() {
   const db = await getDb();
-  if (!db) return { totalAthletes: 0, activeContracts: 0, openOpportunities: 0, pendingCompliance: 0, totalContractValue: 0, totalCampaigns: 0 };
+  if (!db || shouldUseDemoData()) return { totalAthletes: 1, activeContracts: 0, openOpportunities: 1, pendingCompliance: 0, totalContractValue: 0, totalCampaigns: 0 };
 
   const [athletes, activeC, openO, pendingComp, contractVal, campaigns] = await Promise.all([
     db.select({ c: count() }).from(athleteProfiles).where(eq(athleteProfiles.isActive, true)),
@@ -575,7 +1274,7 @@ export async function getAdminKPIs() {
 
 export async function getAthleteKPIs(athleteId: number) {
   const db = await getDb();
-  if (!db) return { activeContracts: 0, openOpportunities: 0, pendingCompliance: 0, unreadMessages: 0, activeCampaigns: 0 };
+  if (!db || shouldUseDemoData()) return { activeContracts: 0, openOpportunities: 1, pendingCompliance: 0, unreadMessages: 0, activeCampaigns: 0 };
 
   const [activeC, openO, pendingComp, activeCamp] = await Promise.all([
     db.select({ c: count() }).from(contracts).where(and(eq(contracts.athleteId, athleteId), eq(contracts.status, "Active"))),
@@ -633,7 +1332,7 @@ export async function getRevenueData() {
 
 export async function getAdminKPIsWithRenewal() {
   const db = await getDb();
-  if (!db) return { totalAthletes: 0, activeContracts: 0, openOpportunities: 0, pendingCompliance: 0, totalContractValue: 0, activeCampaigns: 0, renewingSoon: 0 };
+  if (!db || shouldUseDemoData()) return { totalAthletes: 1, activeContracts: 0, openOpportunities: 1, pendingCompliance: 0, totalContractValue: 0, activeCampaigns: 0, renewingSoon: 0 };
 
   const now = new Date();
   const in90 = new Date(now.getTime() + 90 * 86400000);

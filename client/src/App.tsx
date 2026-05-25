@@ -5,6 +5,8 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import AthletePublicPage from "./pages/AthletePublicPage";
+import LeadCapture from "./pages/LeadCapture";
 
 // Portal pages
 import PortalDashboard from "./pages/portal/Dashboard";
@@ -16,6 +18,7 @@ import PortalCompliance from "./pages/portal/Compliance";
 import PortalGrowth from "./pages/portal/Growth";
 import PortalMessages from "./pages/portal/Messages";
 import PortalSettings from "./pages/portal/Settings";
+import PortalMedia from "./pages/portal/Media";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -28,6 +31,9 @@ import AdminGrowth from "./pages/admin/AdminGrowth";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminTeamFamily from "./pages/admin/AdminTeamFamily";
 import AdminMessages from "./pages/admin/AdminMessages";
+import AdminTenants from "./pages/admin/AdminTenants";
+import AdminAthletePages from "./pages/admin/AdminAthletePages";
+import AdminCRM from "./pages/admin/AdminCRM";
 
 // Layouts
 import PortalLayout from "./components/PortalLayout";
@@ -53,6 +59,9 @@ function Router() {
     <Switch>
       {/* Landing page */}
       <Route path="/" component={Home} />
+      <Route path="/lead" component={LeadCapture} />
+      <Route path="/lead/:tenantSlug" component={LeadCapture} />
+      <Route path="/a/:slug" component={AthletePublicPage} />
 
       {/* Athlete Portal */}
       <Route path="/portal">
@@ -85,6 +94,9 @@ function Router() {
       <Route path="/portal/growth">
         {() => <PortalRoute component={PortalGrowth} />}
       </Route>
+      <Route path="/portal/media">
+        {() => <PortalRoute component={PortalMedia} />}
+      </Route>
       <Route path="/portal/messages">
         {() => <PortalRoute component={PortalMessages} />}
       </Route>
@@ -98,6 +110,15 @@ function Router() {
       </Route>
       <Route path="/admin/athletes">
         {() => <AdminRoute component={AdminAthletes} />}
+      </Route>
+      <Route path="/admin/tenants">
+        {() => <AdminRoute component={AdminTenants} />}
+      </Route>
+      <Route path="/admin/athlete-pages">
+        {() => <AdminRoute component={AdminAthletePages} />}
+      </Route>
+      <Route path="/admin/crm">
+        {() => <AdminRoute component={AdminCRM} />}
       </Route>
       <Route path="/admin/athletes/:id">
         {() => <AdminRoute component={AdminAthletes} />}
@@ -127,7 +148,7 @@ function Router() {
         {() => <AdminRoute component={AdminCompliance} />}
       </Route>
       <Route path="/admin/messages">
-        {() => <AdminRoute component={PortalMessages} />}
+        {() => <AdminRoute component={AdminMessages} />}
       </Route>
       <Route path="/admin/growth">
         {() => <AdminRoute component={AdminGrowth} />}
@@ -144,10 +165,6 @@ function Router() {
       <Route path="/admin/team-family">
         {() => <AdminRoute component={AdminTeamFamily} />}
       </Route>
-      <Route path="/admin/messages">
-        {() => <AdminRoute component={AdminMessages} />}
-      </Route>
-
       {/* Fallback */}
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

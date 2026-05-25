@@ -92,7 +92,7 @@ function makeCtx(role: string = "athlete", userId: number = 1): TrpcContext {
       openId: `user-${userId}`,
       email: `user${userId}@test.com`,
       name: "Test User",
-      loginMethod: "manus",
+      loginMethod: "google",
       role: role as any,
       createdAt: new Date(),
       updatedAt: new Date(),
